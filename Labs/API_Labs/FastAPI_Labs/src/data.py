@@ -1,27 +1,35 @@
-import numpy as np
-from sklearn.datasets import load_iris
-from sklearn.model_selection import train_test_split
+import os
+import pandas as pd
 
-def load_data():
-    """
-    Load the Iris dataset and return the features and target values.
-    Returns:
-        X (numpy.ndarray): The features of the Iris dataset.
-        y (numpy.ndarray): The target values of the Iris dataset.
-    """
-    iris = load_iris()
-    X = iris.data
-    y = iris.target
-    return X, y
 
-def split_data(X, y):
+def load_dataset():
     """
-    Split the data into training and testing sets.
-    Args:
-        X (numpy.ndarray): The features of the dataset.
-        y (numpy.ndarray): The target values of the dataset.
-    Returns:
-        X_train, X_test, y_train, y_test (tuple): The split dataset.
+    Loads penguins.csv and returns:
+      X: pandas.DataFrame (features)
+      y: pandas.Series (target: species)
+      feature_names: list[str]
+      class_names: list[str]
     """
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=12)
-    return X_train, X_test, y_train, y_test
+    base_dir = os.path.dirname(__file__)  # .../src
+    csv_path = os.path.join(base_dir, "..", "data", "penguins.csv")
+
+    df = pd.read_csv(csv_path)
+    df = df.dropna().reset_index(drop=True)
+
+    if "species" not in df.columns:
+        raise ValueError("penguins.csv must contain a 'species' column.")
+
+    y = df["species"]
+
+    # We include numeric features, and add island/sex if available
+    expected = ["bill_length_mm", "bill_depth_mm", "flipper_length_mm", "body_mass_g", "island", "sex"]
+    feature_cols = [c for c in expected if c in df.columns]
+
+    if not feature_cols:
+        raise ValueError(f"No expected feature columns found. Expected one of: {expected}")
+
+    X = df[feature_cols]
+    feature_names = feature_cols
+    class_names = sorted(y.unique().tolist())
+
+    return X, y, feature_names, class_names
