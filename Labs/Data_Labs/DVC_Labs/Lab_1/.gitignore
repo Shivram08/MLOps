@@ -7,3 +7,4 @@ data/processed/
 models/
 metrics.json
 data/student_performance.csv
+.dvc/tmp/
