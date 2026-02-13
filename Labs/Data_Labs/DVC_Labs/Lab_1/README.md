@@ -54,7 +54,7 @@ Lab_1/
 ├── dvc.lock
 ├── metrics.json
 └── README.md
-
+```
 ---
 
 ## Pipeline Stages
@@ -73,7 +73,7 @@ Outputs:
 
 Command:
 python src/prepare.py
-```
+
 ---
 
 ### 2. Train
