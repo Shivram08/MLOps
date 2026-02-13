@@ -5,6 +5,8 @@ DVC_Lab/
 .dvc/tmp/data/student_performance.csv
 data/processed/
 models/
-metrics.json
 data/student_performance.csv
 .dvc/tmp/
+.dvc/tmp/
+/model.pkl
+!metrics.json
