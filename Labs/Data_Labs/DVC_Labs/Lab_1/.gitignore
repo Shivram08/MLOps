@@ -3,3 +3,7 @@ DVC_Lab/
 *.json
 .dvc/cache/
 .dvc/tmp/data/student_performance.csv
+data/processed/
+models/
+metrics.json
+data/student_performance.csv

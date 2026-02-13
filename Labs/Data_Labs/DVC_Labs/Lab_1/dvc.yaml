@@ -1,0 +1,26 @@
+stages:
+  prepare:
+    cmd: python .\src\prepare.py
+    deps:
+    - .\data\student_performance.csv
+    - .\params.yaml
+    - .\src\prepare.py
+    outs:
+    - .\data\processed
+  train:
+    cmd: python .\src\train.py
+    deps:
+    - .\data\processed
+    - .\params.yaml
+    - .\src\train.py
+    outs:
+    - .\models\model.pkl
+  evaluate:
+    cmd: python .\src\evaluate.py
+    deps:
+    - .\data\processed
+    - .\models\model.pkl
+    - .\src\evaluate.py
+    metrics:
+    - .\metrics.json:
+        cache: false

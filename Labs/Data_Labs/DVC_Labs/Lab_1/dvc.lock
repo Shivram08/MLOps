@@ -1,0 +1,65 @@
+schema: '2.0'
+stages:
+  prepare:
+    cmd: python .\src\prepare.py
+    deps:
+    - path: .\data\student_performance.csv
+      hash: md5
+      md5: 01236cf5e712a81dfcc707663cf97442
+      size: 516810
+    - path: .\params.yaml
+      hash: md5
+      md5: 39f9596dc13daa91cf0da513fa0b2033
+      size: 133
+    - path: .\src\prepare.py
+      hash: md5
+      md5: 285406b2b10e4190725aa58416c4511e
+      size: 1499
+    outs:
+    - path: .\data\processed
+      hash: md5
+      md5: 51bc83523ebba797cd76dc9b3954d2f8.dir
+      size: 572444
+      nfiles: 4
+  train:
+    cmd: python .\src\train.py
+    deps:
+    - path: .\data\processed
+      hash: md5
+      md5: 51bc83523ebba797cd76dc9b3954d2f8.dir
+      size: 572444
+      nfiles: 4
+    - path: .\params.yaml
+      hash: md5
+      md5: 39f9596dc13daa91cf0da513fa0b2033
+      size: 133
+    - path: .\src\train.py
+      hash: md5
+      md5: b6b71fea12e7f721fbf9dbd0c4c70cb8
+      size: 955
+    outs:
+    - path: .\models\model.pkl
+      hash: md5
+      md5: 46afe079b0544b099759c707a8ae2076
+      size: 12817313
+  evaluate:
+    cmd: python .\src\evaluate.py
+    deps:
+    - path: .\data\processed
+      hash: md5
+      md5: 51bc83523ebba797cd76dc9b3954d2f8.dir
+      size: 572444
+      nfiles: 4
+    - path: .\models\model.pkl
+      hash: md5
+      md5: 46afe079b0544b099759c707a8ae2076
+      size: 12817313
+    - path: .\src\evaluate.py
+      hash: md5
+      md5: 087cb7032841c2f7690a56065abd1d99
+      size: 687
+    outs:
+    - path: .\metrics.json
+      hash: md5
+      md5: 74fecc950b8e642de39afc1dd03fa528
+      size: 63
