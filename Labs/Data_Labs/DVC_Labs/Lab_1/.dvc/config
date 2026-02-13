@@ -1,7 +1,7 @@
 [core]
-    no_scm = True
+    no_scm = false
     analytics = false
-    remote = myremote
-['remote "myremote"']
-    url = gs://dvc-bucket-25
-    credentialpath = /home/ramin/Documents/MLOps/Labs/Data_Labs/DVC_Labs/Lab_1/git-action-gcp-3e47dbac54ff.json
+    remote = studentgcs
+['remote "studentgcs"']
+    url = gs://mlops-student-dvc-shivram-2026
+    credentialpath = C:\Users\nekka\Downloads\mlops-dvc-student-lab-8062d4b40b08.json
