@@ -54,7 +54,7 @@ Lab_1/
 ├── dvc.lock
 ├── metrics.json
 └── README.md
-
+```
 ---
 
 ## Pipeline Stages
@@ -73,7 +73,7 @@ Outputs:
 
 Command:
 python src/prepare.py
-```
+
 ---
 
 ### 2. Train
@@ -146,7 +146,7 @@ To configure remote access locally:
 dvc remote add -d studentgcs gs://<your-bucket-name>
 dvc remote modify studentgcs credentialpath <path-to-your-json-key>
 ```
-![Bucket](assets\bucket.png)
+![Bucket](assets\Bucket.png)
 
 ---
 
