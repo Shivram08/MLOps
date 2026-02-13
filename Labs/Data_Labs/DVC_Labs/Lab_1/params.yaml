@@ -5,5 +5,5 @@ train:
 model:
   name: random_forest
   n_estimators: 1
-  max_depth: 10
-  min_samples_split: 4
+  max_depth: 2
+  min_samples_split: 3
