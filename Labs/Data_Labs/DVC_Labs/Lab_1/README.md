@@ -130,7 +130,7 @@ Example experiment comparison:
 dvc metrics diff HEAD~1 HEAD --targets Labs/Data_Labs/DVC_Labs/Lab_1/metrics.json
 ```
 Example output:
-![Metrics Diff](assets\metrics.png)
+![Metrics Diff](assets/metrics.png)
 This demonstrates how hyperparameter changes impact model performance.
 
 ---
