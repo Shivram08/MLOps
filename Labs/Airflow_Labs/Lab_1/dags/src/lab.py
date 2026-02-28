@@ -1,88 +1,155 @@
-import pandas as pd
-from sklearn.preprocessing import MinMaxScaler
-from sklearn.cluster import KMeans
-from kneed import KneeLocator
 import pickle
-import os
-import base64
+import pandas as pd
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
 
+
+# ──────────────────────────────────────────────
+# Task 1: Load Data
+# ──────────────────────────────────────────────
 def load_data():
     """
-    Loads data from a CSV file, serializes it, and returns the serialized data.
-    Returns:
-        str: Base64-encoded serialized data (JSON-safe).
+    Loads the Heart Disease dataset from CSV, serializes it,
+    and returns it for downstream tasks via XCom.
     """
-    print("We are here")
-    df = pd.read_csv(os.path.join(os.path.dirname(__file__), "../data/file.csv"))
-    serialized_data = pickle.dumps(df)                    # bytes
-    return base64.b64encode(serialized_data).decode("ascii")  # JSON-safe string
+    df = pd.read_csv("/opt/airflow/dags/data/heart.csv")
+    print(f"[load_data] Loaded dataset with shape: {df.shape}")
+    return pickle.dumps(df)
 
-def data_preprocessing(data_b64: str):
-    """
-    Deserializes base64-encoded pickled data, performs preprocessing,
-    and returns base64-encoded pickled clustered data.
-    """
-    # decode -> bytes -> DataFrame
-    data_bytes = base64.b64decode(data_b64)
-    df = pickle.loads(data_bytes)
 
+# ──────────────────────────────────────────────
+# Task 2: Preprocess Data
+# ──────────────────────────────────────────────
+def preprocess_data(data):
+    """
+    Deserializes the raw dataframe, encodes categorical columns,
+    scales numeric features, and returns a train/test split
+    as a serialized dictionary.
+    """
+    df = pickle.loads(data)
+
+    # Drop non-predictive identifier columns
+    df = df.drop(columns=["id", "dataset"], errors="ignore")
+
+    # Binarize target: 0 = no disease, 1 = disease (num values 1-4)
+    df["num"] = (df["num"] > 0).astype(int)
+
+    # Drop rows with any missing values
     df = df.dropna()
-    clustering_data = df[["BALANCE", "PURCHASES", "CREDIT_LIMIT"]]
 
-    min_max_scaler = MinMaxScaler()
-    clustering_data_minmax = min_max_scaler.fit_transform(clustering_data)
+    # Separate features and target
+    X = df.drop(columns=["num"])
+    y = df["num"]
 
-    # bytes -> base64 string for XCom
-    clustering_serialized_data = pickle.dumps(clustering_data_minmax)
-    return base64.b64encode(clustering_serialized_data).decode("ascii")
+    # One-hot encode categorical columns
+    cat_cols = ["sex", "cp", "restecg", "exang", "slope", "thal"]
+    X = pd.get_dummies(X, columns=cat_cols)
+
+    # Scale numeric features
+    scaler = StandardScaler()
+    X_scaled = scaler.fit_transform(X)
+
+    # Train / test split (80/20, stratified to preserve class balance)
+    X_train, X_test, y_train, y_test = train_test_split(
+        X_scaled, y, test_size=0.2, random_state=42, stratify=y
+    )
+
+    print(f"[preprocess_data] Train size: {len(X_train)}, Test size: {len(X_test)}")
+
+    payload = {
+        "X_train": X_train,
+        "X_test": X_test,
+        "y_train": y_train.values,
+        "y_test": y_test.values,
+    }
+    return pickle.dumps(payload)
 
 
-def build_save_model(data_b64: str, filename: str):
+# ──────────────────────────────────────────────
+# Task 3: Train Model
+# ──────────────────────────────────────────────
+def train_model(data, filename):
     """
-    Builds a KMeans model on the preprocessed data and saves it.
-    Returns the SSE list (JSON-serializable).
+    Deserializes the preprocessed data, trains a Random Forest
+    classifier, saves the model to disk, and returns the
+    serialized test split for evaluation.
     """
-    # decode -> bytes -> numpy array
-    data_bytes = base64.b64decode(data_b64)
-    df = pickle.loads(data_bytes)
+    payload = pickle.loads(data)
+    X_train = payload["X_train"]
+    y_train = payload["y_train"]
 
-    kmeans_kwargs = {"init": "random", "n_init": 10, "max_iter": 300, "random_state": 42}
-    sse = []
-    for k in range(1, 50):
-        kmeans = KMeans(n_clusters=k, **kmeans_kwargs)
-        kmeans.fit(df)
-        sse.append(kmeans.inertia_)
+    # Train Random Forest
+    clf = RandomForestClassifier(
+        n_estimators=100,
+        max_depth=6,
+        random_state=42,
+        class_weight="balanced",   # handles mild class imbalance
+    )
+    clf.fit(X_train, y_train)
 
-    # NOTE: This saves the last-fitted model (k=49), matching your original intent.
-    output_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "model")
-    os.makedirs(output_dir, exist_ok=True)
-    output_path = os.path.join(output_dir, filename)
-    with open(output_path, "wb") as f:
-        pickle.dump(kmeans, f)
+    # Save model to disk
+    model_path = f"/opt/airflow/working_data/{filename}"
+    with open(model_path, "wb") as f:
+        pickle.dump(clf, f)
 
-    return sse  # list is JSON-safe
+    print(f"[train_model] Model saved to {model_path}")
+
+    # Pass test split downstream for evaluation
+    test_payload = {
+        "X_test": payload["X_test"],
+        "y_test": payload["y_test"],
+        "model_path": model_path,
+    }
+    return pickle.dumps(test_payload)
 
 
-def load_model_elbow(filename: str, sse: list):
+# ──────────────────────────────────────────────
+# Task 4: Evaluate Model
+# ──────────────────────────────────────────────
+def evaluate_model(data):
     """
-    Loads the saved model and uses the elbow method to report k.
-    Returns the first prediction (as a plain int) for test.csv.
+    Loads the saved model, runs inference on the held-out test set,
+    computes classification metrics, and writes a report to disk.
     """
-    # load the saved (last-fitted) model
-    output_path = os.path.join(os.path.dirname(__file__), "../model", filename)
-    loaded_model = pickle.load(open(output_path, "rb"))
+    payload = pickle.loads(data)
+    X_test = payload["X_test"]
+    y_test = payload["y_test"]
+    model_path = payload["model_path"]
 
-    # elbow for information/logging
-    kl = KneeLocator(range(1, 50), sse, curve="convex", direction="decreasing")
-    print(f"Optimal no. of clusters: {kl.elbow}")
+    # Load model from disk
+    with open(model_path, "rb") as f:
+        clf = pickle.load(f)
 
-    # predict on raw test data (matches your original code)
-    df = pd.read_csv(os.path.join(os.path.dirname(__file__), "../data/test.csv"))
-    pred = loaded_model.predict(df)[0]
+    # Predict
+    y_pred = clf.predict(X_test)
 
-    # ensure JSON-safe return
-    try:
-        return int(pred)
-    except Exception:
-        # if not numeric, still return a JSON-friendly version
-        return pred.item() if hasattr(pred, "item") else pred
+    # Compute metrics
+    accuracy  = accuracy_score(y_test, y_pred)
+    precision = precision_score(y_test, y_pred, zero_division=0)
+    recall    = recall_score(y_test, y_pred, zero_division=0)
+    f1        = f1_score(y_test, y_pred, zero_division=0)
+
+    report_lines = [
+        "=" * 40,
+        "Heart Disease Classification Report",
+        "=" * 40,
+        f"Accuracy : {accuracy:.4f}",
+        f"Precision: {precision:.4f}",
+        f"Recall   : {recall:.4f}",
+        f"F1 Score : {f1:.4f}",
+        "=" * 40,
+    ]
+
+    report = "\n".join(report_lines) + "\n"
+    for line in report_lines:
+        print(line)
+
+    # Save report to working_data so it persists after the container stops
+    report_path = "/opt/airflow/working_data/classification_report.txt"
+    with open(report_path, "w") as f:
+        f.write(report)
+
+    print(f"[evaluate_model] Report saved to {report_path}")
+    return report

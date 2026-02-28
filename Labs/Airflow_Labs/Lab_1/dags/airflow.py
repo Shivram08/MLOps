@@ -1,61 +1,81 @@
-# Import necessary libraries and modules
 from airflow import DAG
-# from airflow.operators.python import PythonOperator
-from airflow.providers.standard.operators.python import PythonOperator
+from airflow.operators.python_operator import PythonOperator
 from datetime import datetime, timedelta
-from src.lab import load_data, data_preprocessing, build_save_model, load_model_elbow
+from airflow import configuration as conf
 
-# NOTE:
-# In Airflow 3.x, enabling XCom pickling should be done via environment variable:
-# export AIRFLOW__CORE__ENABLE_XCOM_PICKLING=True
-# The old airflow.configuration API is deprecated.
+from src.lab import load_data, preprocess_data, train_model, evaluate_model
 
-# Define default arguments for your DAG
+# Enable pickle support for XCom so serialized data can pass between tasks
+conf.set('core', 'enable_xcom_pickling', 'True')
+
+# ──────────────────────────────────────────────
+# Default Arguments
+# ──────────────────────────────────────────────
 default_args = {
-    'owner': 'your_name',
-    'start_date': datetime(2025, 1, 15),
-    'retries': 0,  # Number of retries in case of task failure
-    'retry_delay': timedelta(minutes=5),  # Delay before retries
+    'owner': 'shiv',
+    'start_date': datetime(2024, 1, 1),
+    'retries': 1,
+    'retry_delay': timedelta(minutes=5),
 }
 
-# Create a DAG instance named 'Airflow_Lab1' with the defined default arguments
-with DAG(
-    'Airflow_Lab1',
+# ──────────────────────────────────────────────
+# DAG Definition
+# ──────────────────────────────────────────────
+dag = DAG(
+    'heart_disease_classification_dag',
     default_args=default_args,
-    description='Dag example for Lab 1 of Airflow series',
+    description='Binary classification pipeline for Heart Disease prediction using Random Forest',
+    schedule_interval=None,  # Manual trigger only
     catchup=False,
-) as dag:
+)
 
-    # Task to load data, calls the 'load_data' Python function
-    load_data_task = PythonOperator(
-        task_id='load_data_task',
-        python_callable=load_data,
-    )
+# ──────────────────────────────────────────────
+# Task 1: Load Data
+# ──────────────────────────────────────────────
+load_data_task = PythonOperator(
+    task_id='load_data_task',
+    python_callable=load_data,
+    dag=dag,
+)
 
-    # Task to perform data preprocessing, depends on 'load_data_task'
-    data_preprocessing_task = PythonOperator(
-        task_id='data_preprocessing_task',
-        python_callable=data_preprocessing,
-        op_args=[load_data_task.output],
-    )
+# ──────────────────────────────────────────────
+# Task 2: Preprocess Data
+# ──────────────────────────────────────────────
+preprocess_data_task = PythonOperator(
+    task_id='preprocess_data_task',
+    python_callable=preprocess_data,
+    op_args=[load_data_task.output],
+    dag=dag,
+)
 
-    # Task to build and save a model, depends on 'data_preprocessing_task'
-    build_save_model_task = PythonOperator(
-        task_id='build_save_model_task',
-        python_callable=build_save_model,
-        op_args=[data_preprocessing_task.output, "model.sav"],
-    )
+# ──────────────────────────────────────────────
+# Task 3: Train Model
+# ──────────────────────────────────────────────
+train_model_task = PythonOperator(
+    task_id='train_model_task',
+    python_callable=train_model,
+    op_args=[preprocess_data_task.output, 'heart_disease_rf.pkl'],
+    provide_context=True,
+    dag=dag,
+)
 
-    # Task to load a model using the 'load_model_elbow' function, depends on 'build_save_model_task'
-    load_model_task = PythonOperator(
-        task_id='load_model_task',
-        python_callable=load_model_elbow,
-        op_args=["model.sav", build_save_model_task.output],
-    )
+# ──────────────────────────────────────────────
+# Task 4: Evaluate Model
+# ──────────────────────────────────────────────
+evaluate_model_task = PythonOperator(
+    task_id='evaluate_model_task',
+    python_callable=evaluate_model,
+    op_args=[train_model_task.output],
+    dag=dag,
+)
 
-    # Set task dependencies
-    load_data_task >> data_preprocessing_task >> build_save_model_task >> load_model_task
+# ──────────────────────────────────────────────
+# Task Dependencies
+# ──────────────────────────────────────────────
+load_data_task >> preprocess_data_task >> train_model_task >> evaluate_model_task
 
-# If this script is run directly, allow command-line interaction with the DAG
+# ──────────────────────────────────────────────
+# CLI entry point
+# ──────────────────────────────────────────────
 if __name__ == "__main__":
-    dag.test()
+    dag.cli()
