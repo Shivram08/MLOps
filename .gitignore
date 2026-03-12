@@ -183,3 +183,7 @@ cython_debug/
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 #.idea/
 .DS_Store
+Labs/Experiment_Tracking_Labs/W&B/Lab2/artifacts/
+Labs/Experiment_Tracking_Labs/W&B/Lab2/checkpoints/
+
+Labs/Experiment_Tracking_Labs/W&B/Lab2/wandb/
