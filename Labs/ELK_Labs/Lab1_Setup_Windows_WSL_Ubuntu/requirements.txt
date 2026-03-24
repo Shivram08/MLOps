@@ -1,0 +1,4 @@
+tensorflow>=2.10.0
+elasticsearch>=7.16.0,<8.0.0
+numpy>=1.23.0
+scikit-learn>=1.0.0

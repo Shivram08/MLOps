@@ -1,180 +1,160 @@
-# ELK-Stack-Setup-in-Linux
+# ELK Lab 1 — CIFAR-10 ML Observability Pipeline
 
-Watch the toturial on how to Setup ELK on Windows WSL Ubuntu at [ELK installation](https://www.youtube.com/watch?v=UMjDYQO2lo0)
+## Overview
 
-=========================
-## Downloading:
+This lab demonstrates using the **ELK Stack (Elasticsearch, Logstash, Kibana)** as an ML observability platform. It extends the original Lab 1 (Iris + Logistic Regression + manual WSL setup) by training a **CNN on CIFAR-10** inside a fully **Dockerized ELK stack**, routing metrics, predictions, and dataset statistics into Elasticsearch for visualization in Kibana.
 
-### Elasticsearch: https://www.elastic.co/downloads/elasticsearch
+| | Original Lab | This Lab |
+|---|---|---|
+| Setup | Manual WSL/Ubuntu install | Docker Compose |
+| Dataset | Iris (150 samples) | CIFAR-10 (60,000 images) |
+| Model | Logistic Regression | 3-block CNN |
+| Logging | File → Logstash → ES | File → Logstash → ES + direct ES indexing |
+| Elasticsearch indices | `logstash-training` | `cifar10-training-metrics`, `cifar10-predictions`, `cifar10-dataset-stats`, `cifar10-logstash-*` |
+| Dataset analysis | None | Per-class RGB statistics |
+| Prediction tracking | None | Per-sample true label, predicted label, confidence |
+| Kibana dashboards | None | 5 visualizations in a unified dashboard |
 
-### Kibana: https://www.elastic.co/downloads/kibana
+---
 
-### Logstash: https://www.elastic.co/downloads/logstash
+## Architecture
 
-### Java: https://www.oracle.com/java/technologies/downloads/
-
-For elasticsearch version 8.12 you need to install Java version 21
-
-==========================
-
-## Moving the files
-
-The files will be in Downloads you need to move it to Ubuntu.
-
-To do that follow this step:
-
-Change the directory to Downloads first and then run this:
-
-```bash
-cd /mnt/c/Users/(username)/Downloads
+```
+┌─────────────────────────────────────────────────────┐
+│                   train_model.py                     │
+│                                                      │
+│  CIFAR-10 CNN Training                               │
+│       │                                              │
+│       ├──► logstash/training.log                     │
+│       │         │                                    │
+│       │         └──► Logstash ──► cifar10-logstash-* │
+│       │                                              │
+│       └──► Elasticsearch (direct)                    │
+│                 ├── cifar10-training-metrics         │
+│                 └── cifar10-predictions              │
+│                                                      │
+│  src/visualize_dataset.py                            │
+│       └──► Elasticsearch (direct)                    │
+│                 └── cifar10-dataset-stats            │
+└─────────────────────────────────────────────────────┘
+                        │
+                    Kibana :5601
 ```
 
-Move the tar files to Ubuntu:
+---
 
-```bash
-sudo mv (name-of-the-files) /home
+## Project Structure
+
+```
+Lab1_Setup_Windows_WSL_Ubuntu/
+├── src/
+│   ├── es_client.py            # Elasticsearch connection + indexing helpers
+│   └── visualize_dataset.py    # Logs CIFAR-10 dataset statistics to ES
+├── logstash/
+│   ├── logstash.conf           # Grok pipeline for training.log
+│   └── training.log            # Generated at runtime by train_model.py
+├── assets/                     # Kibana dashboard screenshots
+├── train_model.py              # CNN training + ELK logging
+├── docker-compose.yaml         # ELK stack (Elasticsearch, Logstash, Kibana)
+├── requirements.txt
+└── README.md
 ```
 
-=======================
+---
 
-## Extracting:
+## Elasticsearch Indices
 
-Change directory to Ubuntu:
+| Index | Documents | Contents |
+|---|---|---|
+| `cifar10-training-metrics` | 10 (one per epoch) | Loss, accuracy, val_loss, val_accuracy |
+| `cifar10-predictions` | 10,000 | True label, predicted label, confidence, correct |
+| `cifar10-dataset-stats` | 10 (one per class) | Per-class RGB mean/std, sample count, brightness |
+| `cifar10-logstash-*` | 108 | Raw parsed log lines from training.log |
 
+---
+
+## Kibana Dashboard
+
+![Kibana Dashboard](assets/kibana_dashboard.png)
+*Unified ML observability dashboard — training curves, dataset analysis, and prediction breakdown in one view.*
+
+---
+
+### Training Curves
+
+![Training Curves](assets/training_curves.png)
+*Val loss decreasing and val accuracy increasing over 10 epochs, tracked per-epoch via `ELKLoggerCallback` and indexed directly into Elasticsearch.*
+
+---
+
+### Dataset Class Distribution
+
+![Class Distribution](assets/class_distribution.png)
+*CIFAR-10 is perfectly balanced — 6,000 samples per class across train + test. Indexed via `visualize_dataset.py` into `cifar10-dataset-stats`.*
+
+---
+
+### Prediction Confidence Distribution
+
+![Confidence Distribution](assets/confidence_distribution.png)
+*Distribution of model confidence scores across 10,000 test predictions. The right-skewed distribution shows the model is generally confident — most predictions cluster above 0.8.*
+
+---
+
+### Per-Class Prediction Accuracy
+
+![Per-Class Accuracy](assets/per_class_accuracy.png)
+*True (green) vs false (blue) predictions per class. `frog` and `ship` are easiest for the model; `cat` and `bird` have the most misclassifications — a known challenge in CIFAR-10.*
+
+---
+
+### Class RGB Color Profile
+
+![RGB Profile](assets/rgb_profile.png)
+*Per-class mean RGB values across all samples. Shows the natural color characteristics of each class — useful context for understanding why visually similar classes (e.g. `cat` vs `dog`) are harder to classify.*
+
+---
+
+## Setup & Usage
+
+### Prerequisites
+- Docker Desktop running (4GB+ memory allocated)
+- Python 3.8+
+
+### 1. Install Python dependencies
 ```bash
-cd /home
+pip install -r requirements.txt
 ```
 
-Then extract them:
-
+### 2. Start the ELK stack
 ```bash
-sudo tar -xzvf (name-of-the-files)
+docker compose up
+```
+Wait until Kibana is available at `http://localhost:5601` (~60 seconds).
+
+### 3. Index CIFAR-10 dataset statistics
+```bash
+python -m src.visualize_dataset
 ```
 
-==============================
-
-## Configure Environment Variables:
-
+### 4. Train the model and log metrics
 ```bash
-nano ~/.bashrc
+python train_model.py
 ```
 
-Add this below and save them (Ctrl + S) and exit (Ctrl + X).
+### 5. View dashboards in Kibana
+- Open `http://localhost:5601`
+- Go to **Dashboard → CIFAR-10 ML Observability Dashboard**
 
+### 6. Stop the stack
 ```bash
-export JAVA_HOME=/home/jdk-21.0.2
-
-export PATH=$JAVA_HOME/bin:$PATH
+docker compose down
 ```
 
-================================
+---
 
-Now to run them in Ubuntu we need to grant permissions:
-
-```bash
-sudo chown -R ayush:ayush /home/(kibana-8.12.0) OR (elasticsearch-8.12.0) OR (logstash-8.12.0)
-```
-
-Here, ayush is the username.
-
-To add a new user, run this:
-
-```bash
-sudo adduser (username) 
-```
-
-Then run the above line.
-
-============================
-
-## Few steps to do before running the elk-stack:
-
-### Generate Kibana Enrollment Token:
-
-In a new terminal, navigate to the Elasticsearch bin directory:
-
-```bash
-cd path/to/elasticsearch/bin
-```
-
-Run the command:
-
-```bash
-./elasticsearch-create-enrollment-token --scope kibana
-```
-
-Copy and save the generated token.
-
-========================
-
-Enter Enrollment Token in Kibana:
-
-Paste the enrollment token into the Kibana configuration interface in your browser.
-
-========================
-
-### Reset Elasticsearch Password:
-
-In a new terminal, navigate to the Elasticsearch bin directory.
-
-Run the password reset command:
-
-```bash
-./elasticsearch-reset-password -u elastic
-```
-
-Note down the newly generated password.
-
-==============================
-
-## Running the stack:
-
-For elasticsearch go to this directory:
-
-```bash
-cd /home/elasticsearch-8.12.0/bin
-```
-
-Then run this:
-
-```bash
-./elasticsearch
-```
-
-=======================
-
-For kibana go to this directory:
-
-```bash
-cd /home/kibana-8.12.0/bin
-```
-
-Then run this:
-
-```bash
-./kibana
-```
-
-========================
-
-You might encounter an error when running Kibana, try this:
-
-```bash
-sudo ./kibana --allow-root
-```
-
-(P.S. This error only came once for me)
-
-========================
-
-For logstash go to this directory:
-
-```bash
-cd /home/logstash-8.12.0
-```
-
-Then run this:
-
-```bash
-bin/logstash -e 'input{stdin{}} output{stdout{}}'
-```
+## Dependencies
+- `tensorflow >= 2.10.0`
+- `elasticsearch >= 7.16.0, < 8.0.0`
+- `numpy >= 1.23.0`
+- `scikit-learn >= 1.0.0`
