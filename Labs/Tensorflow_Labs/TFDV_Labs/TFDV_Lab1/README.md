@@ -19,6 +19,8 @@
 
 ---
 
+> **📓 Note:** Interactive Facets visualizations do not render on GitHub. View the full notebook here: [Open in nbviewer](https://nbviewer.org/github/Shivram08/MLOps/blob/tfdv-lab1-nyc-taxi/Labs/Tensorflow_Labs/TFDV_Labs/TFDV_Lab1/TFDV_Lab1.ipynb)
+
 ## 1. Project Overview
 
 This lab demonstrates **TensorFlow Data Validation (TFDV)** — Google's open-source library for exploring, validating, and monitoring ML datasets — applied to the **NYC Taxi Trips** dataset. The core workflow follows the standard TFDV pipeline:
